@@ -5,7 +5,7 @@ test <- read.csv('test.csv')
 
 train$isTrain <- TRUE
 
-test$Survived <- NA
+test$Survived <- 0
 test$isTrain <- FALSE
 
 combined <- rbind(train, test)
@@ -70,10 +70,12 @@ print(names(blank_values[blank_values == TRUE]))
 
 # Assuming your dataset is named 'train'
 # Replace blank values in the 'Embarked' column with 'S'
-train$Embarked[train$Embarked == ""] <- "S"
+combined$Embarked[combined$Embarked == ""] <- "S"
 
 
 table(combined$Embarked)
+
+str(combined)
 
 combined$Survived <- as.numeric(combined$Survived)
 combined$Pclass <- as.factor(combined$Pclass)
@@ -83,19 +85,21 @@ combined$Parch <-as.factor(combined$Parch)
 combined$SibSp <- as.factor(combined$SibSp)
 
 
-str(train)
+str(combined)
 
 train.final <- combined[combined$isTrain == TRUE,]
 test.final <- combined[combined$isTrain == FALSE,]
 
-train.final <- subset(train.final, select = -isTrain)
-test.final <- subset(test.final, select = -c(isTrain, Survived))
+train.final <- subset(train.final, select = -c(isTrain, Name, Cabin, Ticket))
+test.final <- subset(test.final, select = -c(isTrain, Survived, Name, Cabin, Ticket))
 
-lm.model <- lm(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked, data = train.final)
+lm.model <- lm(Survived ~ . - PassengerId, data = train.final)
 
 summary(lm.model)
 
 prediction <- predict(lm.model, test.final)
+
+str(test.final)
 
 prediction <- round(prediction)
 print(rounded_value) 
@@ -110,6 +114,25 @@ colnames(lm.pred.submission)[colnames(lm.pred.submission) == "prediction"] <- "S
 
 ## Exporting the linear regression results
 write.csv(lm.pred.submission, file = "linear_regression_results.csv", row.names = FALSE)
+
+
+#### Converting to Factors and dividing into train and test
+
+combined$Survived <- as.numeric(combined$Survived)
+combined$Pclass <- as.factor(combined$Pclass)
+combined$Sex <- as.factor(combined$Sex)
+combined$Embarked <- as.factor(combined$Embarked)
+combined$Parch <-as.factor(combined$Parch)
+combined$SibSp <- as.factor(combined$SibSp)
+
+
+str(combined)
+
+train.final <- combined[combined$isTrain == TRUE,]
+test.final <- combined[combined$isTrain == FALSE,]
+
+train.final <- subset(train.final, select = -c(isTrain, Name, Cabin, Ticket))
+test.final <- subset(test.final, select = -c(isTrain, Survived, Name, Cabin, Ticket))
 
 ## glm
 
@@ -134,3 +157,39 @@ colnames(glm.prediction)[colnames(glm.prediction) == "fitted.results"] <- "Survi
 ## Exporting the logistic regression results
 write.csv(glm.prediction, file = "logistic_regression_results.csv", row.names = FALSE)
 
+## Decision Tree
+install.packages("rpart")
+library(rpart)
+
+tree.model <- rpart(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked, method = 'class', data = train.final)
+
+printcp(tree.model)
+
+tree.prediction <- predict(tree.model, newdata =  test.final)
+
+tree.prediction
+
+tree.fitted.results <- ifelse(tree.prediction[, 2] > tree.prediction[, 1], 1, 0)
+
+tree.prediction <- as.data.frame(cbind(test.final$PassengerId, tree.fitted.results))
+colnames(tree.prediction)[colnames(tree.prediction) == "V1"] <- "PassengerId"
+colnames(tree.prediction)[colnames(tree.prediction) == "tree.fitted.results"] <- "Survived"
+
+## Exporting the decision tree results
+write.csv(tree.prediction, file = "decision_tree_results.csv", row.names = FALSE)
+
+
+## Random Forest
+install.packages("randomForest")
+library(randomForest)
+
+rf.model <- randomForest(Survived ~ . -PassengerId, data = train.final)
+
+rf.prediction <- predict(rf.model, newdata = test.final)
+
+test.final$Survived <- rf.prediction
+
+df.rf.submission <- test.final[,c("PassengerId", "Survived")]
+
+## Exporting the random forest results
+write.csv(df.rf.submission, file = "random_forest_results.csv", row.names = FALSE)
